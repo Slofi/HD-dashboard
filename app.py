@@ -184,13 +184,20 @@ def stop_app(app_id):
 
 @app.route("/stop-all", methods=["POST"])
 def stop_all():
-    for a in APPS:
-        sc = a.get("stop_cmd")
-        if sc:
-            subprocess.run(sc, capture_output=True)
-    subprocess.run(["pkill", "-f", "vivaldi-stable"], capture_output=True)
     def _do():
-        time.sleep(0.8)
+        # 1) stop every app's backend service (ops-toc, overmesh, …)
+        for a in APPS:
+            sc = a.get("stop_cmd")
+            if sc:
+                subprocess.run(sc, capture_output=True)
+        time.sleep(0.5)
+        # 2) close ALL browser windows — dashboard + app kiosks. The running
+        #    process is `vivaldi-bin`, NOT `vivaldi-stable` (that's only the
+        #    launcher-script name), so the old `-f vivaldi-stable` matched nothing
+        #    and left the dashboard frozen on screen.
+        subprocess.run(["pkill", "-f", "vivaldi-bin"], capture_output=True)
+        time.sleep(0.3)
+        # 3) finally stop the dashboard backend itself
         subprocess.run(["systemctl", "--user", "stop", "launcher"], capture_output=True)
     threading.Thread(target=_do, daemon=True).start()
     return jsonify({"status": "ok"})
