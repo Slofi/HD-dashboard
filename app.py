@@ -297,6 +297,77 @@ def shutdown_cancel():
     _shutdown_at = None
     return jsonify({"ok": True})
 
+# ── Self-update / version / restart (git-managed checkout) ───────────────────
+
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+def run_git(args, timeout=20):
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    key = os.path.expanduser("~/.ssh/id_ed25519")
+    if os.path.exists(key):
+        env["GIT_SSH_COMMAND"] = f"ssh -i {key} -o BatchMode=yes -o StrictHostKeyChecking=no"
+    return subprocess.run(["git", *args], cwd=APP_ROOT, env=env,
+                          stdin=subprocess.DEVNULL, check=False, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
+
+def git_version_payload(check_remote=False):
+    payload = {"ok": True, "is_git": os.path.isdir(os.path.join(APP_ROOT, ".git"))}
+    current = run_git(["rev-parse", "--short", "HEAD"])
+    branch  = run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+    remote  = run_git(["config", "--get", "remote.origin.url"])
+    date    = run_git(["log", "-1", "--format=%cd", "--date=format:%d.%m.%Y"])
+    payload.update({
+        "current": current.stdout.strip() if current.returncode == 0 else "",
+        "branch":  branch.stdout.strip()  if branch.returncode == 0 else "",
+        "remote":  remote.stdout.strip()  if remote.returncode == 0 else "",
+        "date":    date.stdout.strip()    if date.returncode == 0 else "",
+    })
+    if not payload["is_git"] or current.returncode != 0:
+        payload["ok"] = False
+        payload["error"] = "Launcher directory is not a usable git checkout."
+        return payload
+    if check_remote:
+        ref = payload["branch"] if payload["branch"] and payload["branch"] != "HEAD" else "main"
+        latest = run_git(["ls-remote", "origin", ref], timeout=20)
+        if latest.returncode == 0 and latest.stdout.strip():
+            full = latest.stdout.split()[0]
+            payload["latest"] = full[:7]
+            payload["up_to_date"] = full.startswith(payload["current"])
+        else:
+            payload["remote_error"] = latest.stdout.strip() or "Unable to check remote version."
+    return payload
+
+def _restart_launcher_soon():
+    time.sleep(1)
+    subprocess.run(["systemctl", "--user", "restart", "launcher"], check=False)
+
+@app.route("/version")
+def version():
+    check_remote = request.args.get("check") in {"1", "true", "yes"}
+    return jsonify(git_version_payload(check_remote))
+
+@app.route("/update", methods=["POST"])
+def update_app():
+    logs = []
+    try:
+        status = run_git(["status", "--short", "--branch"], timeout=20)
+        if status.stdout.strip():
+            logs.append("$ git status --short --branch\n" + status.stdout.strip())
+        result = run_git(["pull", "--rebase", "--autostash"], timeout=90)
+        logs.append("$ git pull --rebase --autostash\n" + result.stdout.strip())
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc), "log": "\n\n".join(logs)[-6000:]}), 500
+    ok = result.returncode == 0
+    if ok:
+        threading.Thread(target=_restart_launcher_soon, daemon=True).start()
+    return jsonify({"ok": ok, "log": "\n\n".join(logs)[-6000:], "restart": ok}), (200 if ok else 500)
+
+@app.route("/restart", methods=["POST"])
+def restart_app():
+    threading.Thread(target=_restart_launcher_soon, daemon=True).start()
+    return jsonify({"ok": True, "message": "Restarting dashboard."})
+
 # ── Map app routes ───────────────────────────────────────────────────────────
 
 @app.route("/map")

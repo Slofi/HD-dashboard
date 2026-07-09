@@ -373,10 +373,71 @@
                 <button id="shutdown-cancel-btn" onclick="cancelShutdownTimer()">Cancel</button>
             </div>
         </div>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.07);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <label style="font-size:0.85rem;color:#b0c4e8;">Dashboard</label>
+                <span id="dash-version" style="font-size:0.72rem;color:#7a8aaa;font-variant-numeric:tabular-nums;">…</span>
+            </div>
+            <div id="dash-update-status" style="font-size:0.75rem;color:#7a8aaa;margin-bottom:8px;min-height:1em;"></div>
+            <div style="display:flex;gap:6px;">
+                <button id="dash-check-btn" onclick="checkVersion()"
+                    style="flex:1;padding:11px 6px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#e8f0ff;font-size:0.8rem;cursor:pointer;">Check</button>
+                <button id="dash-update-btn" onclick="updateDash()"
+                    style="flex:1;padding:11px 6px;border-radius:8px;border:1px solid var(--accent);background:rgba(255,255,255,0.04);color:var(--accent);font-size:0.8rem;cursor:pointer;">Update</button>
+                <button id="dash-restart-btn" onclick="restartDash()"
+                    style="flex:1;padding:11px 6px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#e8f0ff;font-size:0.8rem;cursor:pointer;">Restart</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const DEFAULT_ACCENT = '#4ab8de';
+
+        // ── Dashboard self-update (git-managed checkout) ──
+        function loadDashVersion(check) {
+            const v = document.getElementById('dash-version');
+            if (check) v.textContent = 'checking…';
+            fetch('/version' + (check ? '?check=1' : ''))
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.ok) { v.textContent = 'no git'; return; }
+                    let s = d.current || '?';
+                    if (d.date) s += ' · ' + d.date;
+                    if (d.latest) s += ' · ' + (d.up_to_date ? 'latest' : 'update ready');
+                    v.textContent = s;
+                    if (check) {
+                        const st = document.getElementById('dash-update-status');
+                        st.textContent = d.remote_error ? ('Check warning: ' + d.remote_error)
+                            : d.latest ? (d.up_to_date ? 'Up to date.' : 'Update available.') : '';
+                    }
+                })
+                .catch(() => { v.textContent = 'unavailable'; });
+        }
+        function checkVersion() { loadDashVersion(true); }
+        function updateDash() {
+            const btn = document.getElementById('dash-update-btn');
+            const st  = document.getElementById('dash-update-status');
+            btn.disabled = true; st.textContent = 'Updating from GitHub…';
+            fetch('/update', {method: 'POST'})
+                .then(r => r.json())
+                .then(d => {
+                    st.textContent = d.restart ? 'Updated. Restarting…'
+                        : (d.ok ? 'Already up to date.' : 'Update failed.');
+                    if (d.restart) setTimeout(() => location.reload(), 4000);
+                    else btn.disabled = false;
+                })
+                .catch(() => { st.textContent = 'Update failed.'; btn.disabled = false; });
+        }
+        function restartDash() {
+            if (!confirm('Restart the dashboard?')) return;
+            const st = document.getElementById('dash-update-status');
+            st.textContent = 'Restarting…';
+            fetch('/restart', {method: 'POST'})
+                .then(() => setTimeout(() => location.reload(), 4000))
+                .catch(() => { st.textContent = 'Restart failed.'; });
+        }
+        loadDashVersion(false);
 
         function hexToRgb(hex) {
             return [
