@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Hand-Deck Launcher
+Exec=bash -c 'sleep 3 && firefox --new-window --kiosk http://localhost:8080'
+Type=Application
+X-KDE-autostart-after=panel

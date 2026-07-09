@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Maps</title>
+    <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+    <style>
+        /* ── OM colour palette (exact match) ── */
+        :root {
+            --accent:     #4ade80;
+            --accent-dim: #1a3a25;
+            --bg:         #0d1117;
+            --bg2:        #161b22;
+            --bg3:        #21262d;
+            --border:     #30363d;
+            --text:       #c9d1d9;
+            --muted:      #8b949e;
+            --green:      #3fb950;
+            --yellow:     #d29922;
+            --red:        #f85149;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0;
+            -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            width: 100%; height: 100vh; overflow: hidden;
+            background: var(--bg);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: 14px; color: var(--text);
+            display: flex; flex-direction: column;
+        }
+
+        /* ── Toolbar (same as OM #map-toolbar) ── */
+        #map-toolbar {
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center;
+            gap: 8px; flex-shrink: 0;
+            padding: 4px 8px; flex-wrap: nowrap;
+        }
+        .toolbar-spacer { flex: 1; }
+        .toolbar-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+
+        /* ── Buttons (exact OM .btn style) ── */
+        .btn {
+            background: var(--bg3); border: 1px solid var(--border);
+            color: var(--text); padding: 4px 12px;
+            border-radius: 6px; cursor: pointer;
+            font-size: 12px; transition: background 0.1s;
+            font-family: inherit; white-space: nowrap;
+            touch-action: manipulation;
+        }
+        .btn:active { background: var(--border); }
+        .btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+        .btn-primary {
+            background: var(--accent-dim); border: 1px solid var(--accent);
+            color: var(--accent); padding: 4px 12px; border-radius: 6px;
+            cursor: pointer; font-size: 12px; font-family: inherit;
+            touch-action: manipulation;
+        }
+        .btn-primary:active { background: var(--accent); color: var(--bg); }
+        .btn-danger {
+            background: none; border: 1px solid rgba(248,81,73,0.35);
+            color: var(--red); padding: 4px 12px; border-radius: 6px;
+            cursor: pointer; font-size: 12px; font-family: inherit;
+            touch-action: manipulation;
+        }
+        .btn-danger:active { background: rgba(248,81,73,0.1); }
+
+        /* ── GPS status (toolbar right) ── */
+        #gps-status {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 11px; color: var(--muted); white-space: nowrap;
+        }
+        #gps-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--border);
+            transition: background 0.4s, box-shadow 0.4s;
+        }
+        #gps-dot.fix { background: var(--green); box-shadow: 0 0 5px rgba(63,185,80,0.6); }
+
+        /* ── Map ── */
+        #map { flex: 1; min-height: 0; position: relative; }
+
+        /* ── Leaflet map controls — OM style ── */
+        .map-locate-btn {
+            background: var(--bg3); border: 1px solid var(--border);
+            border-radius: 6px; width: 30px; height: 30px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer; color: var(--text);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            transition: color 0.2s, border-color 0.2s, background 0.1s;
+            margin-bottom: 4px; user-select: none;
+            touch-action: manipulation;
+        }
+        .map-locate-btn:active { background: var(--border); }
+        .map-locate-btn.active { color: var(--accent); border-color: var(--accent); }
+
+        /* Layer panel — opens to the right of the button */
+        #map-layer-panel {
+            position: absolute; left: 38px; top: 0;
+            background: var(--bg2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 6px 4px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+            min-width: 160px; z-index: 5000;
+            display: none; flex-direction: column; gap: 2px;
+            max-height: min(380px, calc(100vh - 120px));
+            overflow-y: auto; overscroll-behavior: contain;
+            scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+        }
+        #map-layer-panel.open { display: flex; }
+        .map-layer-opt {
+            padding: 6px 10px; border-radius: 5px; cursor: pointer;
+            font-size: 12px; color: var(--text); white-space: nowrap;
+            transition: background 0.15s; touch-action: manipulation;
+        }
+        .map-layer-opt:active { background: var(--bg3); }
+        .map-layer-opt.active { color: var(--accent); font-weight: 600; }
+        .map-layer-opt.disabled { opacity: 0.4; cursor: default; }
+        .layer-panel-sep { height: 1px; background: var(--border); margin: 4px 6px; }
+
+        /* ── Place-note banner (OM #wp-pick-banner style) ── */
+        #place-banner {
+            display: none; position: absolute;
+            top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 2000;
+            background: var(--yellow); color: #0a0f1e;
+            padding: 8px 18px; border-radius: 8px;
+            font-weight: 700; font-size: 13px;
+            pointer-events: none; white-space: nowrap;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        #place-banner.show { display: block; }
+        #place-cancel {
+            display: none; position: absolute;
+            top: 10px; right: 12px; z-index: 2000;
+        }
+        #place-cancel.show { display: block; }
+
+        /* ── Route banner + info ── */
+        #route-banner {
+            display: none; position: absolute;
+            top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 2000;
+            background: var(--accent); color: #0a0f1e;
+            padding: 8px 18px; border-radius: 8px;
+            font-weight: 700; font-size: 13px;
+            pointer-events: none; white-space: nowrap;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        #route-banner.show { display: block; }
+        #route-cancel {
+            display: none; position: absolute;
+            top: 10px; right: 12px; z-index: 2000;
+        }
+        #route-cancel.show { display: block; }
+        #route-info {
+            display: none; position: absolute;
+            bottom: 8px; left: 8px; z-index: 1000;
+            background: var(--bg2); border: 1px solid var(--border);
+            border-radius: 6px; padding: 7px 12px;
+            font-size: 12px; color: var(--text);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        }
+        #route-info.show { display: block; }
+        #route-summary { color: var(--accent); font-weight: 600; }
+
+        /* ── Notes side panel ── */
+        #notes-panel {
+            position: absolute; top: 0; right: 0; bottom: 0;
+            width: 260px; z-index: 1500;
+            background: var(--bg2); border-left: 1px solid var(--border);
+            display: none; flex-direction: column;
+            box-shadow: -4px 0 16px rgba(0,0,0,0.4);
+        }
+        #notes-panel.open { display: flex; }
+        #notes-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 12px; border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        #notes-panel-title {
+            font-size: 12px; font-weight: 600; color: var(--accent);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        #notes-list-inner { flex: 1; overflow-y: auto; padding: 6px 0; }
+        .note-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 12px; cursor: pointer;
+            transition: background 0.1s; touch-action: manipulation;
+        }
+        .note-row:active { background: var(--bg3); }
+        .note-emoji { font-size: 1.1rem; flex-shrink: 0; }
+        .note-info { flex: 1; min-width: 0; }
+        .note-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .note-desc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .note-del { background: none; border: none; color: rgba(248,81,73,0.3); font-size: 12px; cursor: pointer; padding: 4px; touch-action: manipulation; flex-shrink: 0; }
+        .note-del:active { color: var(--red); }
+        .notes-empty { padding: 20px 12px; font-size: 12px; color: var(--muted); text-align: center; }
+
+        /* ── Note modal (OM .modal-overlay / .modal-box style) ── */
+        #note-modal {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6); z-index: 3000;
+            align-items: center; justify-content: center;
+            padding: 16px; box-sizing: border-box;
+        }
+        #note-modal.open { display: flex; }
+        #note-modal-box {
+            background: var(--bg2); border: 1px solid var(--border);
+            border-radius: 8px; width: 380px; max-width: 95vw;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        #note-modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-bottom: 1px solid var(--border);
+        }
+        #note-modal-title { font-weight: 600; color: var(--accent); font-size: 14px; }
+        #note-modal-close {
+            background: none; border: none; color: var(--muted);
+            cursor: pointer; font-size: 18px; line-height: 1;
+            padding: 0 2px; touch-action: manipulation;
+        }
+        #note-modal-body { padding: 16px; }
+
+        .field-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; display: block; text-transform: uppercase; letter-spacing: 0.4px; }
+        .map-input {
+            width: 100%; background: var(--bg3); border: 1px solid var(--border);
+            border-radius: 6px; color: var(--text); padding: 6px 10px;
+            font-size: 12px; margin-bottom: 12px; font-family: inherit; outline: none;
+        }
+        .map-input:focus { border-color: var(--accent); }
+
+        .emoji-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+        .emoji-btn {
+            font-size: 1.2rem; padding: 3px 5px;
+            background: var(--bg3); border: 1px solid var(--border);
+            border-radius: 5px; cursor: pointer; touch-action: manipulation;
+            line-height: 1.4;
+        }
+        .emoji-btn.active { background: var(--accent-dim); border-color: var(--accent); }
+
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+        #note-modal-status { font-size: 11px; min-height: 14px; color: var(--red); margin-bottom: 8px; }
+
+        /* ── Leaflet overrides (exact OM style) ── */
+        .leaflet-control-zoom-in, .leaflet-control-zoom-out {
+            background-color: var(--bg3) !important; color: var(--text) !important;
+            border: 1px solid var(--border) !important; border-radius: 6px !important;
+        }
+        .leaflet-control-zoom-in:active, .leaflet-control-zoom-out:active { background-color: var(--border) !important; }
+        .leaflet-control-zoom { border: none !important; }
+        .leaflet-control-zoom-in  { margin-bottom: 2px !important; }
+        .leaflet-control-zoom-out { border-top: none !important; }
+        .leaflet-control-attribution {
+            background: rgba(13,17,23,0.80) !important; color: #aaa !important;
+            font-size: 10px !important; border-radius: 4px 0 0 0 !important;
+        }
+        .leaflet-control-attribution a { color: #888 !important; }
+        .leaflet-popup-content-wrapper {
+            background: var(--bg2) !important; color: var(--text) !important;
+            border: 1px solid var(--border) !important; border-radius: 6px !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+        }
+        .leaflet-popup-tip { background: var(--bg2) !important; }
+        .leaflet-popup-content { margin: 10px 14px !important; font-size: 12px !important; line-height: 1.6 !important; }
+        .leaflet-popup-close-button { color: var(--muted) !important; font-size: 16px !important; }
+        .leaflet-container { background: var(--bg) !important; }
+        .leaflet-bar { border: none !important; }
+        .leaflet-bar a { border-radius: 6px !important; margin-bottom: 2px !important; }
+        .leaflet-top { z-index: 1001 !important; }
+
+        /* ── Popup buttons (OM .map-popup-btn) ── */
+        .map-popup-name { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+        .map-popup-meta { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+        .map-popup-desc { font-size: 12px; color: var(--text); margin-bottom: 8px; }
+        .map-popup-btn {
+            margin-top: 0; padding: 4px 10px;
+            background: var(--bg3); border: 1px solid var(--border);
+            border-radius: 4px; color: var(--accent); font-size: 11px;
+            cursor: pointer; touch-action: manipulation;
+        }
+        .map-popup-btn:active { background: var(--accent-dim); }
+        .map-popup-btn.danger { color: var(--red); border-color: rgba(248,81,73,0.35); }
+        .map-popup-btn.danger:active { background: rgba(248,81,73,0.1); }
+        .popup-btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+
+        /* ── GPS marker ── */
+        .gps-wrap { position: relative; width: 20px; height: 20px; }
+        .gps-inner {
+            position: absolute; top: 4px; left: 4px;
+            width: 12px; height: 12px;
+            background: #4ade80; border: 2px solid #fff;
+            border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+        }
+        .gps-ring {
+            position: absolute; top: 0; left: 0;
+            width: 20px; height: 20px;
+            border: 2px solid rgba(74,222,128,0.4);
+            border-radius: 50%;
+            animation: gps-pulse 2s ease-out infinite;
+        }
+        @keyframes gps-pulse {
+            0%   { transform: scale(0.6); opacity: 1; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        * { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg); }
+        *::-webkit-scrollbar { width: 6px; }
+        *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <!-- Toolbar -->
+    <div id="map-toolbar">
+        <button class="btn" onclick="window.location='/'">← Back</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn" id="notes-btn" onclick="toggleNotesPanel()">Notes</button>
+        <button class="btn" id="add-note-btn" onclick="startPlaceNote()">+ Note</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn" id="route-btn" onclick="startRouteMode()">Route</button>
+        <button class="btn btn-danger" id="route-clear-btn" onclick="clearRoute()" style="display:none">✕ Route</button>
+        <div class="toolbar-spacer"></div>
+        <div id="gps-status">
+            <div id="gps-dot"></div>
+            <span id="gps-label">No fix</span>
+        </div>
+    </div>
+
+    <!-- Map container -->
+    <div id="map">
+        <div id="place-banner">Tap map to place note</div>
+        <button class="btn" id="place-cancel" onclick="cancelPlaceNote()">Cancel</button>
+        <div id="route-banner">Tap start point</div>
+        <button class="btn" id="route-cancel" onclick="cancelRouteMode()">Cancel</button>
+        <div id="route-info">
+            <span id="route-summary"></span>
+        </div>
+        <!-- Notes side panel lives inside map so absolute positioning works -->
+        <div id="notes-panel">
+            <div id="notes-panel-header">
+                <span id="notes-panel-title">Notes</span>
+                <button class="btn" onclick="toggleNotesPanel()" style="padding:2px 8px;font-size:11px">✕ Close</button>
+            </div>
+            <div id="notes-list-inner"></div>
+        </div>
+    </div>
+
+    <!-- Note modal -->
+    <div id="note-modal" onclick="if(event.target===this)closeNoteModal()">
+        <div id="note-modal-box">
+            <div id="note-modal-header">
+                <span id="note-modal-title">Add Note</span>
+                <button id="note-modal-close" onclick="closeNoteModal()">✕</button>
+            </div>
+            <div id="note-modal-body">
+                <label class="field-label">Marker</label>
+                <div class="emoji-grid" id="emoji-grid"></div>
+                <label class="field-label">Name *</label>
+                <input class="map-input" id="note-name" type="text" placeholder="Note name" maxlength="40"
+                       onkeydown="if(event.key==='Enter')saveNote()">
+                <label class="field-label">Description</label>
+                <input class="map-input" id="note-desc" type="text" placeholder="Optional" maxlength="120">
+                <div id="note-modal-status"></div>
+                <div class="modal-actions" id="note-modal-actions"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/leaflet/leaflet.js"></script>
+    <script>
+        const HAS_OFFLINE = {{ 'true' if has_offline else 'false' }};
+
+        const TILE_LAYERS = {
+            local:     { label: '📦 Local (Offline)', url: '/tiles/{z}/{x}/{y}.png',                                                                        attr: '© OpenStreetMap contributors', maxZoom: 18, offline: true },
+            osm:       { label: 'OpenStreetMap',      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                                            attr: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 },
+            voyager:   { label: 'Voyager',            url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                      attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
+            dark:      { label: 'Dark Matter',        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                 attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
+            positron:  { label: 'Positron',           url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                                attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
+            satellite: { label: 'Satellite (Esri)',   url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Tiles © Esri', maxZoom: 18 },
+            terrain:   { label: 'Terrain (Stadia)',   url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',                          attr: '© Stadia Maps © Stamen © OpenStreetMap', maxZoom: 18 },
+        };
+
+        const NOTE_EMOJIS = [
+            '📍','🚩','⭐','⚠️','✅','❌','🔴','🟡','🟢','🔵',
+            '🏠','🏔️','⛺','🌲','💧','🚗','📡','🎯','🔭','🏁',
+        ];
+
+        // ── State ──────────────────────────────────────────────────────────
+        let map, tileLayer, activeLayer = 'voyager';
+        let gpsMarker = null, gpsLocked = false, gpsPos = null;
+        let notes = {}, noteMarkers = {};
+        let _editNoteId = null, _placeLat = null, _placeLon = null;
+        let _placing = false, _noteEmoji = '📍';
+        let _mapLayerMenuPanel = null;
+
+        // ── Map init ───────────────────────────────────────────────────────
+        function initMap() {
+            const saved = (() => { try { return JSON.parse(localStorage.getItem('hd_mapView')); } catch(e) { return null; } })();
+            map = L.map('map', { zoomSnap: 0.5, zoomDelta: 0.5 })
+                   .setView(saved ? [saved.lat, saved.lng] : [46.05, 14.50], saved ? saved.zoom : 9);
+
+            map.on('moveend', () => {
+                const c = map.getCenter();
+                try { localStorage.setItem('hd_mapView', JSON.stringify({lat: c.lat, lng: c.lng, zoom: map.getZoom()})); } catch(e) {}
+            });
+            map.on('dragstart', () => setGpsLock(false));
+            map.on('click', (e) => {
+                if (_placing) {
+                    _placeLat = e.latlng.lat; _placeLon = e.latlng.lng;
+                    cancelPlaceNote();
+                    openNoteModal(null, _placeLat, _placeLon);
+                    return;
+                }
+                if (_routeMode) {
+                    _routeClick(e.latlng.lat, e.latlng.lng);
+                }
+            });
+
+            // Locate/lock button
+            const LocateCtrl = L.Control.extend({
+                onAdd() {
+                    const wrap = L.DomUtil.create('div');
+                    const btn  = L.DomUtil.create('div', 'map-locate-btn', wrap);
+                    btn.id = 'map-locate-btn'; btn.title = 'Center on GPS'; btn.innerHTML = '⊕';
+                    L.DomEvent.on(btn, 'click', L.DomEvent.stopPropagation);
+                    L.DomEvent.on(btn, 'click', toggleGpsLock);
+                    return wrap;
+                }
+            });
+            new LocateCtrl({ position: 'topleft' }).addTo(map);
+
+            // Layer switcher button + panel
+            const LayerCtrl = L.Control.extend({
+                onAdd() {
+                    const wrap  = L.DomUtil.create('div');
+                    wrap.style.position = 'relative';
+                    const btn   = L.DomUtil.create('div', 'map-locate-btn', wrap);
+                    btn.id = 'map-layer-btn'; btn.title = 'Switch tile layer'; btn.innerHTML = '⧉'; btn.style.fontSize = '18px';
+                    const panel = L.DomUtil.create('div', '', wrap);
+                    panel.id = 'map-layer-panel';
+                    L.DomEvent.disableScrollPropagation(panel);
+
+                    // Local (offline) option
+                    const localOpt = L.DomUtil.create('div', 'map-layer-opt' + (!HAS_OFFLINE ? ' disabled' : ''), panel);
+                    localOpt.textContent = TILE_LAYERS.local.label;
+                    localOpt.dataset.key = 'local';
+                    if (HAS_OFFLINE) {
+                        L.DomEvent.on(localOpt, 'click', (e) => { L.DomEvent.stopPropagation(e); setTileLayer('local'); panel.classList.remove('open'); });
+                    } else {
+                        localOpt.title = 'No .mbtiles file at /home/slofi/maps/default.mbtiles';
+                    }
+
+                    const sep = L.DomUtil.create('div', 'layer-panel-sep', panel);
+
+                    // Online options
+                    Object.entries(TILE_LAYERS).forEach(([key, def]) => {
+                        if (key === 'local') return;
+                        const opt = L.DomUtil.create('div', 'map-layer-opt', panel);
+                        opt.textContent = def.label;
+                        opt.dataset.key = key;
+                        if (activeLayer === key) opt.classList.add('active');
+                        L.DomEvent.on(opt, 'click', (e) => {
+                            L.DomEvent.stopPropagation(e);
+                            setTileLayer(key);
+                            panel.classList.remove('open');
+                        });
+                    });
+
+                    L.DomEvent.on(btn, 'click', L.DomEvent.stopPropagation);
+                    L.DomEvent.on(btn, 'click', () => panel.classList.toggle('open'));
+                    return wrap;
+                }
+            });
+            new LayerCtrl({ position: 'topleft' }).addTo(map);
+
+            const savedLayer = localStorage.getItem('hd_mapLayer') || (HAS_OFFLINE ? 'local' : 'voyager');
+            setTileLayer(savedLayer);
+            loadNotes();
+            pollGps();
+            setInterval(pollGps, 5000);
+        }
+
+        // ── Tile layers ────────────────────────────────────────────────────
+        function setTileLayer(key) {
+            const def = TILE_LAYERS[key] || TILE_LAYERS.voyager;
+            if (tileLayer) map.removeLayer(tileLayer);
+            tileLayer = L.tileLayer(def.url, { attribution: def.attr, maxZoom: def.maxZoom }).addTo(map);
+            activeLayer = key;
+            localStorage.setItem('hd_mapLayer', key);
+            document.querySelectorAll('.map-layer-opt').forEach(el =>
+                el.classList.toggle('active', el.dataset.key === key)
+            );
+        }
+
+        // ── GPS ────────────────────────────────────────────────────────────
+        async function pollGps() {
+            try {
+                const d = await fetch('/api/gps').then(r => r.json());
+                const dot = document.getElementById('gps-dot');
+                const lbl = document.getElementById('gps-label');
+                if (d.fix && d.lat != null) {
+                    dot.className = 'fix';
+                    lbl.textContent = d.sats ? `${d.sats} sats` : 'Fix';
+                    gpsPos = [d.lat, d.lon];
+                    const icon = L.divIcon({
+                        html: '<div class="gps-wrap"><div class="gps-ring"></div><div class="gps-inner"></div></div>',
+                        className: '', iconSize: [20, 20], iconAnchor: [10, 10]
+                    });
+                    if (!gpsMarker) gpsMarker = L.marker(gpsPos, {icon, zIndexOffset: 1000}).addTo(map);
+                    else gpsMarker.setLatLng(gpsPos);
+                    if (gpsLocked) map.panTo(gpsPos);
+                } else {
+                    dot.className = ''; lbl.textContent = 'No fix'; gpsPos = null;
+                    if (gpsMarker) { map.removeLayer(gpsMarker); gpsMarker = null; }
+                    setGpsLock(false);
+                }
+            } catch(e) {}
+        }
+
+        function setGpsLock(val) {
+            gpsLocked = val;
+            const btn = document.getElementById('map-locate-btn');
+            if (btn) btn.classList.toggle('active', val);
+            if (val && gpsPos) map.panTo(gpsPos);
+        }
+        function toggleGpsLock() {
+            if (!gpsPos) return;
+            setGpsLock(!gpsLocked);
+        }
+
+        // ── Place-note mode ────────────────────────────────────────────────
+        function startPlaceNote() {
+            _placing = true;
+            document.getElementById('place-banner').classList.add('show');
+            document.getElementById('place-cancel').classList.add('show');
+            document.getElementById('add-note-btn').classList.add('active');
+            document.body.classList.add('map-pick-mode');
+            if (document.getElementById('notes-panel').classList.contains('open')) toggleNotesPanel();
+        }
+        function cancelPlaceNote() {
+            _placing = false;
+            document.getElementById('place-banner').classList.remove('show');
+            document.getElementById('place-cancel').classList.remove('show');
+            document.getElementById('add-note-btn').classList.remove('active');
+            document.body.classList.remove('map-pick-mode');
+        }
+
+        // ── Notes ──────────────────────────────────────────────────────────
+        async function loadNotes() {
+            try {
+                const list = await fetch('/api/map/notes').then(r => r.json());
+                list.forEach(n => { notes[n.id] = n; renderNoteMarker(n); });
+                refreshNotesList();
+            } catch(e) {}
+        }
+
+        function renderNoteMarker(note) {
+            if (noteMarkers[note.id]) { map.removeLayer(noteMarkers[note.id]); delete noteMarkers[note.id]; }
+            const icon = L.divIcon({
+                html: `<div style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,0.7))">${esc(note.emoji || '📍')}</div>`,
+                className: '', iconSize: [26, 26], iconAnchor: [8, 24]
+            });
+            noteMarkers[note.id] = L.marker([note.lat, note.lon], {icon})
+                .addTo(map)
+                .bindPopup(notePopupHtml(note), {maxWidth: 220});
+        }
+
+        function notePopupHtml(note) {
+            const ts = note.created_at ? new Date(note.created_at * 1000).toLocaleDateString() : '';
+            return `<div>
+                <div class="map-popup-name">${esc(note.name)}</div>
+                <div class="map-popup-meta">${ts}</div>
+                ${note.description ? `<div class="map-popup-desc">${esc(note.description)}</div>` : ''}
+                <div class="popup-btn-row">
+                    <button class="map-popup-btn" onclick="map.closePopup();openNoteModal(${note.id})">Edit</button>
+                    <button class="map-popup-btn danger" onclick="confirmDeleteNote(${note.id})">Delete</button>
+                </div>
+            </div>`;
+        }
+
+        function refreshNotesList() {
+            const el    = document.getElementById('notes-list-inner');
+            const count = Object.keys(notes).length;
+            document.getElementById('notes-btn').textContent = count ? `Notes (${count})` : 'Notes';
+            if (!count) {
+                el.innerHTML = '<div class="notes-empty">No notes yet.<br>Tap "+ Note" then tap the map.</div>';
+                return;
+            }
+            const sorted = Object.values(notes).sort((a, b) => b.created_at - a.created_at);
+            el.innerHTML = sorted.map(n => `
+                <div class="note-row" onclick="goToNote(${n.id})">
+                    <div class="note-emoji">${esc(n.emoji || '📍')}</div>
+                    <div class="note-info">
+                        <div class="note-name">${esc(n.name)}</div>
+                        ${n.description ? `<div class="note-desc">${esc(n.description)}</div>` : ''}
+                    </div>
+                    <button class="note-del" onclick="event.stopPropagation();confirmDeleteNote(${n.id})" title="Delete">✕</button>
+                </div>`).join('');
+        }
+
+        function goToNote(id) {
+            const note = notes[id];
+            if (!note) return;
+            toggleNotesPanel();
+            map.setView([note.lat, note.lon], Math.max(map.getZoom(), 14));
+            setTimeout(() => { if (noteMarkers[id]) noteMarkers[id].openPopup(); }, 250);
+        }
+
+        function toggleNotesPanel() {
+            const panel = document.getElementById('notes-panel');
+            panel.classList.toggle('open');
+            document.getElementById('notes-btn').classList.toggle('active', panel.classList.contains('open'));
+        }
+
+        // ── Note modal ─────────────────────────────────────────────────────
+        function buildEmojiGrid() {
+            document.getElementById('emoji-grid').innerHTML = NOTE_EMOJIS.map(e =>
+                `<button class="emoji-btn${e === _noteEmoji ? ' active' : ''}" onclick="selectEmoji('${e}')">${e}</button>`
+            ).join('');
+        }
+        function selectEmoji(e) {
+            _noteEmoji = e;
+            document.querySelectorAll('.emoji-btn').forEach(b => b.classList.toggle('active', b.textContent === e));
+        }
+
+        function openNoteModal(id, lat, lon) {
+            _editNoteId = id;
+            const note = id ? notes[id] : null;
+            _noteEmoji = note ? (note.emoji || '📍') : '📍';
+            if (lat != null) { _placeLat = lat; _placeLon = lon; }
+
+            document.getElementById('note-modal-title').textContent = id ? 'Edit Note' : 'Add Note';
+            document.getElementById('note-name').value  = note ? note.name : '';
+            document.getElementById('note-desc').value  = note ? (note.description || '') : '';
+            document.getElementById('note-modal-status').textContent = '';
+            buildEmojiGrid();
+
+            const actions = document.getElementById('note-modal-actions');
+            if (id) {
+                actions.innerHTML = `
+                    <button class="btn-danger" onclick="confirmDeleteNote(${id},true)">Delete</button>
+                    <button class="btn" onclick="closeNoteModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveNote()">Save</button>`;
+            } else {
+                actions.innerHTML = `
+                    <button class="btn" onclick="closeNoteModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveNote()">Save</button>`;
+            }
+
+            document.getElementById('note-modal').classList.add('open');
+            setTimeout(() => document.getElementById('note-name').focus(), 80);
+        }
+
+        function closeNoteModal() {
+            document.getElementById('note-modal').classList.remove('open');
+            _editNoteId = null; _placeLat = null; _placeLon = null;
+        }
+
+        async function saveNote() {
+            const name   = (document.getElementById('note-name').value || '').trim();
+            const desc   = (document.getElementById('note-desc').value || '').trim();
+            const status = document.getElementById('note-modal-status');
+            if (!name) { status.textContent = 'Name is required.'; return; }
+            try {
+                let res, data;
+                if (_editNoteId) {
+                    res  = await fetch(`/api/map/notes/${_editNoteId}`, {
+                        method:'PUT', headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({name, description: desc, emoji: _noteEmoji})
+                    });
+                    data = await res.json();
+                    if (data.ok) {
+                        notes[_editNoteId] = {...notes[_editNoteId], name, description: desc, emoji: _noteEmoji};
+                        renderNoteMarker(notes[_editNoteId]);
+                        map.closePopup();
+                    }
+                } else {
+                    res  = await fetch('/api/map/notes', {
+                        method:'POST', headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({lat:_placeLat, lon:_placeLon, name, description:desc, emoji:_noteEmoji})
+                    });
+                    data = await res.json();
+                    if (data.ok) {
+                        const n = {id:data.id, lat:_placeLat, lon:_placeLon, name, description:desc,
+                                   emoji:_noteEmoji, created_at: Math.floor(Date.now()/1000)};
+                        notes[data.id] = n;
+                        renderNoteMarker(n);
+                    }
+                }
+                if (data.ok) { refreshNotesList(); closeNoteModal(); }
+                else status.textContent = data.error || 'Save failed';
+            } catch(e) { status.textContent = 'Network error'; }
+        }
+
+        async function confirmDeleteNote(id, fromModal) {
+            if (!confirm(`Delete "${notes[id]?.name || 'this note'}"?`)) return;
+            try {
+                const d = await fetch(`/api/map/notes/${id}`, {method:'DELETE'}).then(r => r.json());
+                if (d.ok) {
+                    if (noteMarkers[id]) { map.closePopup(); map.removeLayer(noteMarkers[id]); delete noteMarkers[id]; }
+                    delete notes[id];
+                    refreshNotesList();
+                    if (fromModal) closeNoteModal();
+                }
+            } catch(e) {}
+        }
+
+        // ── Routing ───────────────────────────────────────────────────────
+        let _routeMode    = false;
+        let _routeStep    = 0;   // 0 = waiting start, 1 = waiting end
+        let _routeLine    = null;
+        let _routeMarkers = [];
+
+        function startRouteMode() {
+            cancelPlaceNote();
+            _routeMode = true; _routeStep = 0;
+            document.getElementById('route-btn').classList.add('active');
+            document.getElementById('route-banner').textContent = 'Tap start point';
+            document.getElementById('route-banner').classList.add('show');
+            document.getElementById('route-cancel').classList.add('show');
+            document.body.classList.add('map-pick-mode');
+        }
+
+        function cancelRouteMode() {
+            _routeMode = false; _routeStep = 0;
+            document.getElementById('route-btn').classList.remove('active');
+            document.getElementById('route-banner').classList.remove('show');
+            document.getElementById('route-cancel').classList.remove('show');
+            document.body.classList.remove('map-pick-mode');
+        }
+
+        function clearRoute() {
+            cancelRouteMode();
+            if (_routeLine) { map.removeLayer(_routeLine); _routeLine = null; }
+            _routeMarkers.forEach(m => map.removeLayer(m));
+            _routeMarkers = [];
+            document.getElementById('route-info').classList.remove('show');
+            document.getElementById('route-clear-btn').style.display = 'none';
+            document.getElementById('route-btn').style.display = '';
+        }
+
+        function _addRouteMarker(lat, lon, color, label) {
+            const m = L.circleMarker([lat, lon], {
+                radius: 7, fillColor: color, color: '#fff',
+                weight: 2, opacity: 1, fillOpacity: 1
+            }).bindTooltip(label, {permanent: true, direction: 'top', offset: [0, -10],
+                className: 'leaflet-tooltip'}).addTo(map);
+            _routeMarkers.push(m);
+        }
+
+        async function _routeClick(lat, lon) {
+            if (_routeStep === 0) {
+                // clear any previous route
+                if (_routeLine) { map.removeLayer(_routeLine); _routeLine = null; }
+                _routeMarkers.forEach(m => map.removeLayer(m)); _routeMarkers = [];
+                _addRouteMarker(lat, lon, '#4ade80', 'Start');
+                _routeStep = 1;
+                document.getElementById('route-banner').textContent = 'Tap end point';
+            } else {
+                _addRouteMarker(lat, lon, '#f85149', 'End');
+                cancelRouteMode();
+                await fetchRoute(
+                    _routeMarkers[0].getLatLng().lat, _routeMarkers[0].getLatLng().lng,
+                    lat, lon
+                );
+            }
+        }
+
+        async function fetchRoute(lat1, lon1, lat2, lon2) {
+            const url = `https://router.project-osrm.org/route/v1/driving/` +
+                        `${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+            try {
+                const data = await fetch(url).then(r => r.json());
+                if (!data.routes?.length) { alert('No route found.'); return; }
+                const route = data.routes[0];
+                _routeLine = L.geoJSON(route.geometry, {
+                    style: { color: '#4ade80', weight: 4, opacity: 0.85 }
+                }).addTo(map);
+                map.fitBounds(_routeLine.getBounds(), {padding: [40, 40]});
+
+                const dist = route.distance >= 1000
+                    ? `${(route.distance / 1000).toFixed(1)} km`
+                    : `${Math.round(route.distance)} m`;
+                const mins = Math.round(route.duration / 60);
+                const time = mins >= 60
+                    ? `${Math.floor(mins/60)}h ${mins%60}min`
+                    : `${mins} min`;
+
+                document.getElementById('route-summary').textContent = `🚗  ${dist}  ·  ${time}`;
+                document.getElementById('route-info').classList.add('show');
+                document.getElementById('route-clear-btn').style.display = '';
+                document.getElementById('route-btn').style.display = 'none';
+            } catch(e) {
+                alert('Routing failed — check internet connection.');
+            }
+        }
+
+        // ── Helpers ────────────────────────────────────────────────────────
+        function esc(s) {
+            return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { closeNoteModal(); cancelPlaceNote(); }
+        });
+
+        // Close layer panel on outside click
+        document.addEventListener('click', (e) => {
+            const p = document.getElementById('map-layer-panel');
+            if (p && p.classList.contains('open') && !p.closest('.leaflet-control').contains(e.target)) {
+                p.classList.remove('open');
+            }
+        });
+
+        // Keep map-pick-mode cursor override
+        document.head.insertAdjacentHTML('beforeend', `<style>
+            body.map-pick-mode .leaflet-container { cursor: crosshair !important; }
+            body.map-pick-mode .leaflet-drag-target { cursor: grabbing !important; }
+        </style>`);
+
+        initMap();
+    </script>
+</body>
+</html>

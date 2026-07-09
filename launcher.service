@@ -1,0 +1,15 @@
+[Unit]
+Description=Hand-Deck Launcher
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/radxa/launcher
+ExecStart=/usr/bin/python3 /home/radxa/launcher/app.py
+Restart=on-failure
+RestartSec=3
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+[Install]
+WantedBy=default.target
