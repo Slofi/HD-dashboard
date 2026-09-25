@@ -2,7 +2,7 @@ type:: project
 project:: hd-dashboard
 status:: archived
 tags:: #hand-deck #launcher #kiosk #flask #archived
-updated:: 2026-08-27
+updated:: 2026-09-25 (DeepSeek — the shared CARTO key was removed from the tile URLs in `templates/map.html`. Public + archived repo, so no key-entry UI was added by design: its CARTO layers now render CARTO's watermark while OSM/Esri/local are unaffected. The old value stays in history deliberately — rotating at CARTO is what neutralises it. Full detail → `hd-dashboard-overview.md` `updated::`.) · 2026-08-27
 
 # hd-dashboard — Hand-Deck Kiosk Launcher
 
