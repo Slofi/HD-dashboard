@@ -373,12 +373,15 @@
     <script>
         const HAS_OFFLINE = {{ 'true' if has_offline else 'false' }};
 
+        // ⚠️ CARTO's raster layers need an API key on the tile URL. The operator supplies their OWN — none
+        // is bundled here: a key committed to a public repo is spent by every user's browser. (Removed
+        // 2026-09-25; the old value is still in this repo's history, so rotating it at CARTO is the fix.)
         const TILE_LAYERS = {
             local:     { label: '📦 Local (Offline)', url: '/tiles/{z}/{x}/{y}.png',                                                                        attr: '© OpenStreetMap contributors', maxZoom: 18, offline: true },
             osm:       { label: 'OpenStreetMap',      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                                            attr: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 },
-            voyager:   { label: 'Voyager',            url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_28gv_1_9a660bc1a18b5547f66e1762',                      attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
-            dark:      { label: 'Dark Matter',        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_28gv_1_9a660bc1a18b5547f66e1762',                                 attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
-            positron:  { label: 'Positron',           url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_28gv_1_9a660bc1a18b5547f66e1762',                                attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
+            voyager:   { label: 'Voyager',            url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                      attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
+            dark:      { label: 'Dark Matter',        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                 attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
+            positron:  { label: 'Positron',           url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                                attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
             satellite: { label: 'Satellite (Esri)',   url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Tiles © Esri', maxZoom: 18 },
             terrain:   { label: 'Terrain (Stadia)',   url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',                          attr: '© Stadia Maps © Stamen © OpenStreetMap', maxZoom: 18 },
         };
