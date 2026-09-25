@@ -1,8 +1,8 @@
 type:: project
 project:: hd-dashboard
-status:: archived
-tags:: #hand-deck #launcher #kiosk #flask #archived
-updated:: 2026-09-25 (DeepSeek — the shared CARTO key was removed from the tile URLs in `templates/map.html`. Public + archived repo, so no key-entry UI was added by design: its CARTO layers now render CARTO's watermark while OSM/Esri/local are unaffected. The old value stays in history deliberately — rotating at CARTO is what neutralises it. Full detail → `hd-dashboard-overview.md` `updated::`.) · 2026-08-27
+status:: live
+tags:: #hand-deck #launcher #kiosk #flask #live
+updated:: 2026-09-25 (DeepSeek — ⚠️ **STATUS CORRECTED: LIVE, not archived.** This repo **is** the Hand-Deck launcher running on the A7A right now — `/home/radxa/launcher`, unit `launcher.service`, port 8080, opened by the desktop shortcut. Verified by hash, and only `templates/map.html` is undeployed. Earlier the same day: the shared CARTO key was removed from the tile URLs (public repo). **Revisit the no-key-entry-UI decision — this app is live**, and its default layer `voyager` is a CARTO layer, so the kiosk opens on a watermarked basemap. The old key value stays in history deliberately; rotating at CARTO is what neutralises it. Full detail → `hd-dashboard-overview.md` `updated::`) · 2026-08-27
 
 # hd-dashboard — Hand-Deck Kiosk Launcher
 
@@ -23,10 +23,29 @@ than being hand-edited.
 
 ---
 
-## Status — archived 2026-08-27 (S411)
+## Status — ⚠️ CORRECTED 2026-09-25: **LIVE, not archived**
 
-**Filip's call, this session.** It follows Hand-Deck, which is shelved; with no host to run on, the
-launcher is not active. **Archived, not deleted** — the rationale and revival path are on the card
+**This section said "archived 2026-08-27 (S411) … with no host to run on, the launcher is not active."** That is **false**, and it was believed for weeks. The launcher runs on the **A7A handheld right now**: `/home/radxa/launcher`, unit `launcher.service` (port 8080), started by `~/Desktop/HandDeck-Launcher.desktop` → `/home/radxa/launcher/start-launcher.sh`, opening Firefox kiosk at `localhost:8080`.
+
+**Proof is by hash, not by prose** — the repo and the running tree agree exactly:
+
+| file | repo (`~/Projects/hd-dashboard`) | live (`/home/radxa/launcher`) |
+|---|---|---|
+| `app.py` | `4ce0549cc67cc270` | `4ce0549cc67cc270` ✔ |
+| `start-launcher.sh` | `5df8100becefa198` | `5df8100becefa198` ✔ |
+| `templates/index.html` | `f219d47073` | `f219d47073` ✔ |
+| `launcher.service` | `dd2cdc9a8a` | `dd2cdc9a8a` ✔ |
+| `templates/map.html` | `db54898ce4` | `a7603bf2b6` ✗ **the only file that differs** |
+
+So the repo is **not** far ahead of the device — exactly **one file** (`templates/map.html`) is undeployed. Everything else is byte-identical.
+
+**Why the status was wrong, and what it cost:** the 2026-08-27 entry below was Filip's call *at that moment* — the A7A had no usable host and the project was going dormant. It was never reversed when the launcher went back into service for the deck. Catching it: the CARTO key was stripped from `templates/map.html` earlier on 2026-09-25 on the assumption this was a dead project with no users, and a key-entry field was deliberately **not** added. **That decision is worth revisiting precisely because the app is live** — and because the live default layer is `voyager`, a CARTO layer, so the kiosk today opens on a **watermarked** basemap.
+
+**Deploy is one file** (`~/Projects/hd-dashboard` → the device): ⚠️ use the trailing `/.` — `cp -r <dir> ~/launcher` copies the *directory inside* the existing one and creates `~/launcher/hd-dashboard`.
+
+**The 2026-08-27 archive call, kept for the record (superseded, as above):**
+**Filip's call, that session.** It followed Hand-Deck, which is shelved; with no host to run on, the
+launcher was believed inactive. **Archived, not deleted** — the rationale and revival path are on the card
 under *Why it is kept and not deleted*. Short version, in his words:
 
 > *"The HD problem is HW, if we change it, it may be useful."*
