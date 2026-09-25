@@ -1,7 +1,7 @@
 type:: project-overview
 project:: hd-dashboard
 tags:: #overview #hand-deck #launcher #kiosk #flask #archived
-updated:: 2026-08-27
+updated:: 2026-09-25 (DeepSeek — **the shared CARTO key was REMOVED from the tile URLs**: this repo is public and archived, so a committed key was being spent by every browser that loaded the map. No key-entry UI was added, by Filip's decision for an archived project — so its CARTO layers (Voyager, Dark Matter, Positron) now render CARTO's "API KEY REQUIRED" watermark, while the keyless layers (OSM, Esri, local offline tiles) are unaffected. ⚠️ The old value is still in this repo's **history** and this change does not touch that — deliberate; **rotating the key at CARTO is what neutralises it**. ⚠️ Also reported, not changed: the Stadia/Stamen terrain layer here is keyless and returns HTTP 401 with a blocked-tile image.) · 2026-08-27
 
 # hd-dashboard — Overview Card
 
