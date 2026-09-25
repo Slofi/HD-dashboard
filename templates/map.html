@@ -379,12 +379,45 @@
         const TILE_LAYERS = {
             local:     { label: '📦 Local (Offline)', url: '/tiles/{z}/{x}/{y}.png',                                                                        attr: '© OpenStreetMap contributors', maxZoom: 18, offline: true },
             osm:       { label: 'OpenStreetMap',      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                                            attr: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 },
-            voyager:   { label: 'Voyager',            url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                      attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
-            dark:      { label: 'Dark Matter',        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                 attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
-            positron:  { label: 'Positron',           url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                                attr: '© OpenStreetMap © CARTO', maxZoom: 19 },
+            voyager:   { label: 'Voyager',            url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                      attr: '© OpenStreetMap © CARTO', maxZoom: 19, key: 'carto' },
+            dark:      { label: 'Dark Matter',        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                 attr: '© OpenStreetMap © CARTO', maxZoom: 19, key: 'carto' },
+            positron:  { label: 'Positron',           url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                                attr: '© OpenStreetMap © CARTO', maxZoom: 19, key: 'carto' },
             satellite: { label: 'Satellite (Esri)',   url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Tiles © Esri', maxZoom: 18 },
-            terrain:   { label: 'Terrain (Stadia)',   url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',                          attr: '© Stadia Maps © Stamen © OpenStreetMap', maxZoom: 18 },
+            terrain:   { label: 'Terrain (Stadia)',   url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',                          attr: '© Stadia Maps © Stamen © OpenStreetMap', maxZoom: 18, key: 'stadia' },
         };
+
+        // Keys are per PROVIDER (2026-09-25). Each has its own localStorage slot and its own query
+        // parameter — CARTO takes ?key=, Stadia takes ?api_key= — and a layer names its provider via `key`.
+        // No built-in key for either: a bundled key is spent by every browser that loads the kiosk.
+        const KEY_PROVIDERS = {
+            carto:  { ls: 'hd_carto_key',  param: 'key',     label: 'CARTO'  },
+            stadia: { ls: 'hd_stadia_key', param: 'api_key', label: 'Stadia' },
+        };
+        // A keyless layer with no key of its own is what this kiosk shows by default — NOT a watermarked
+        // CARTO layer, which is what it used to open on (activeLayer default was 'voyager').
+        const KEYLESS_FALLBACK = HAS_OFFLINE ? 'local' : 'satellite';
+
+        function providerKey(name) {
+            const p = KEY_PROVIDERS[name];
+            if (!p) return '';
+            try { return (localStorage.getItem(p.ls) || '').trim(); } catch(e) { return ''; }
+        }
+        function layerKey(def) { return def && def.key ? providerKey(def.key) : ''; }
+        function layerUrl(def) {
+            if (!def) return '';
+            if (!def.key) return def.url;
+            const k = layerKey(def);
+            return k ? def.url + '?' + KEY_PROVIDERS[def.key].param + '=' + encodeURIComponent(k) : '';
+        }
+        function layerAvailable(def) { return !!def && (!def.key || !!layerKey(def)); }
+        function saveProviderKey(name, value) {
+            const p = KEY_PROVIDERS[name];
+            if (!p) return;
+            try { if (value) localStorage.setItem(p.ls, String(value).trim()); else localStorage.removeItem(p.ls); } catch(e) {}
+            setTileLayer(TILE_LAYERS[activeLayer] ? activeLayer : KEYLESS_FALLBACK);
+            const panel = document.getElementById('map-layer-panel');
+            if (panel) panel.querySelectorAll('.map-layer-opt').forEach(el => { const d = TILE_LAYERS[el.dataset.key]; el.classList.toggle('disabled', !!d && !!d.key && !layerKey(d)); });
+        }
 
         const NOTE_EMOJIS = [
             '📍','🚩','⭐','⚠️','✅','❌','🔴','🟡','🟢','🔵',
@@ -465,10 +498,46 @@
                         opt.textContent = def.label;
                         opt.dataset.key = key;
                         if (activeLayer === key) opt.classList.add('active');
+                        // A keyed layer with no key of our own is shown locked rather than silently watermarked.
+                        if (def.key && !layerKey(def)) { opt.classList.add('disabled'); opt.title = def.label + ' needs your own ' + KEY_PROVIDERS[def.key].label + ' key — add it below'; }
                         L.DomEvent.on(opt, 'click', (e) => {
                             L.DomEvent.stopPropagation(e);
                             setTileLayer(key);
                             panel.classList.remove('open');
+                        });
+                    });
+
+                    // Provider API keys — the operator's own, never bundled. One row per provider.
+                    Object.entries(KEY_PROVIDERS).forEach(([name, prov]) => {
+                        L.DomUtil.create('div', 'layer-panel-sep', panel);
+                        const keyWrap = L.DomUtil.create('div', 'map-layer-key', panel);
+                        keyWrap.dataset.provider = name;
+                        keyWrap.style.cssText = 'padding:6px 8px;display:flex;flex-direction:column;gap:5px;min-width:190px';
+                        const keyLbl = L.DomUtil.create('div', '', keyWrap);
+                        keyLbl.textContent = prov.label + ' API key (yours)';
+                        keyLbl.style.cssText = 'font-size:10px;opacity:0.75';
+                        const keyRow = L.DomUtil.create('div', '', keyWrap);
+                        keyRow.style.cssText = 'display:flex;gap:5px';
+                        const keyInput = L.DomUtil.create('input', '', keyRow);
+                        keyInput.type = 'text'; keyInput.placeholder = 'Paste your ' + prov.label + ' key'; keyInput.value = providerKey(name);
+                        keyInput.style.cssText = 'flex:1;min-width:0;font-size:11px;padding:3px 5px;border-radius:4px;border:1px solid rgba(255,255,255,0.25);background:rgba(0,0,0,0.35);color:inherit';
+                        const keySave = L.DomUtil.create('button', '', keyRow);
+                        keySave.textContent = 'Save'; keySave.style.cssText = 'font-size:11px;padding:3px 7px;cursor:pointer';
+                        const keyMsg = L.DomUtil.create('div', '', keyWrap);
+                        keyMsg.textContent = providerKey(name) ? prov.label + ' layers enabled.' : 'No key — ' + prov.label + ' layers locked.';
+                        keyMsg.style.cssText = 'font-size:10px;opacity:0.65';
+                        L.DomEvent.on(keyWrap, 'click', L.DomEvent.stopPropagation);
+                        L.DomEvent.on(keyWrap, 'dblclick', L.DomEvent.stopPropagation);
+                        L.DomEvent.on(keyWrap, 'mousedown', L.DomEvent.stopPropagation);
+                        L.DomEvent.on(keyWrap, 'touchstart', L.DomEvent.stopPropagation);
+                        // This Leaflet has no text-input guard in its keyboard handler, so a keystroke here
+                        // would pan or zoom the map underneath while the operator types.
+                        L.DomEvent.on(keyWrap, 'keydown', L.DomEvent.stopPropagation);
+                        L.DomEvent.on(keyWrap, 'keypress', L.DomEvent.stopPropagation);
+                        L.DomEvent.on(keyWrap, 'keyup', L.DomEvent.stopPropagation);
+                        L.DomEvent.on(keySave, 'click', (e) => {
+                            L.DomEvent.stopPropagation(e);
+                            saveProviderKey(name, keyInput.value);
                         });
                     });
 
@@ -479,7 +548,7 @@
             });
             new LayerCtrl({ position: 'topleft' }).addTo(map);
 
-            const savedLayer = localStorage.getItem('hd_mapLayer') || (HAS_OFFLINE ? 'local' : 'voyager');
+            const savedLayer = localStorage.getItem('hd_mapLayer') || (HAS_OFFLINE ? 'local' : KEYLESS_FALLBACK);
             setTileLayer(savedLayer);
             loadNotes();
             pollGps();
@@ -488,9 +557,13 @@
 
         // ── Tile layers ────────────────────────────────────────────────────
         function setTileLayer(key) {
-            const def = TILE_LAYERS[key] || TILE_LAYERS.voyager;
+            let def = TILE_LAYERS[key] || TILE_LAYERS.voyager;
+            // Guard BEFORE touching the map: a keyed layer with no key of OUR OWN must never blank the map
+            // (layerUrl() returns '' for it, i.e. an empty tile layer) and must never borrow a key that is
+            // not the operator's. Fall back to a keyless layer instead.
+            if (!layerAvailable(def)) { def = TILE_LAYERS[KEYLESS_FALLBACK]; key = KEYLESS_FALLBACK; }
             if (tileLayer) map.removeLayer(tileLayer);
-            tileLayer = L.tileLayer(def.url, { attribution: def.attr, maxZoom: def.maxZoom }).addTo(map);
+            tileLayer = L.tileLayer(layerUrl(def), { attribution: def.attr, maxZoom: def.maxZoom }).addTo(map);
             activeLayer = key;
             localStorage.setItem('hd_mapLayer', key);
             document.querySelectorAll('.map-layer-opt').forEach(el =>
