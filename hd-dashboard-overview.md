@@ -7,7 +7,7 @@ updated:: 2026-09-26 (DeepSeek — the checkout was **moved out of `Projects/Arc
 
 > Quick-reference card — crucial info for Filip + Haskill. Full context & changelog → `hd-dashboard/hd-dashboard.md`.
 > ⚠️ **CORRECTED 2026-09-25 (DeepSeek): this repo is NOT archived — it IS the live Hand-Deck launcher.** Deployed at **`/home/radxa/launcher`** on **`radxa-cubie-a7a`** (user `radxa`), systemd user unit **`launcher.service`** (`ExecStart=/usr/bin/python3 /home/radxa/launcher/app.py`), **port 8080**, started by `~/Desktop/HandDeck-Launcher.desktop` → `/home/radxa/launcher/start-launcher.sh`, which opens Firefox kiosk at `localhost:8080`. **Verified by hash, not by prose:** `app.py` = `4ce0549cc67cc270` and `start-launcher.sh` = `5df8100becefa198` on both the repo and the device. The 2026-08-27 "archived" status was **wrong**, and it misled at least one decision (the key was stripped as if this were a dead project). ⚠️ **The deployed copy dates from 2026-07-09, so the repo is AHEAD of the device** — anything committed here is not live until deployed.
-> **Deploy (run on the device):** `cp -a ~/Projects/hd-dashboard/. /home/radxa/launcher/` then `systemctl --user restart launcher.service`. ⚠️ Note the trailing `/.` — `cp -r <dir> ~/launcher` (as older docs show) copies the *directory* into the existing one and creates `~/launcher/hd-dashboard`. ⚠️ Also note `~/Projects/hand-deck/launcher/` is a **dead pre-S365 copy** — never deploy from it.
+> **Deploy (run on the device):** `cp -a ~/Projects/hd-dashboard/. /home/radxa/launcher/` then `systemctl --user restart launcher.service`. ⚠️ Note the trailing `/.` — `cp -r <dir> ~/launcher` (as older docs show) copies the *directory* into the existing one and creates `~/launcher/hd-dashboard`. ⚠️ Also note `~/Projects/hand-deck/launcher/` — the **dead pre-S365 copy this line used to warn about — was DELETED 2026-09-26** (backup tarball in `~/DeepSeek-Home/notes/snapshots-2026-09-26/`); this repo is now the only source.
 > 📦 **2026-09-26 (DeepSeek, Filip's call) — folder + doc fork fixed.** The checkout was **moved out of `Archive/` to `~/Projects/hd-dashboard/`** — the path the deploy line above already assumed. These two doc files had **two homes** (tracked on `origin/main` *and* untracked in the working tree, of different vintages); they are now **one tracked copy**, the checkout is **current with `origin/main`**, and the working tree's `templates/map.html` (which re-added the **OLD, REVOKED** CARTO key) was **discarded**. Nothing in the repo is deployed by this — the device still runs the 2026-07-09 copy (plus the one-file map fix).
 
 ## Overview
@@ -67,11 +67,10 @@ Do not delete the repo or the local checkout; the reasoning above is why it is *
   `XDG_RUNTIME_DIR=/run/user/1000` in its unit. Without them it starts and silently renders nothing.
 - **Tiles launch nothing:** the targets are *other apps' ports* — OM Lite on **:8082**, OPS-TOC Lite on
   **:8090**. If those aren't up, the launcher is fine and its dependencies are not.
-- **⚠️ Watch out for the stale copy at `Projects/hand-deck/launcher/`** — **not a git repo**, superseded
-  when the launcher was split out at S365, marked `STALE-DO-NOT-USE.md` (291-line `app.py` from 2026-06-30
-  vs the real 473; it predates this repo, so its code is in no git history). It has misled twice already.
-  `projects.md` has carried "retire stale copy" as a TODO since S365 — **removal is Filip's call**
-  (2026-09-26: a backup tarball was taken before anything is done).
+- ✅ **The stale copy at `Projects/hand-deck/launcher/` was DELETED 2026-09-26 (Filip's go).** It was a dead
+  pre-S365 copy (`STALE-DO-NOT-USE.md`; 291-line `app.py` from 2026-06-30 vs the real 473) that had already
+  misled twice. It **predated this repo**, so its code was in no git history — a **backup tarball** was taken
+  first: `~/DeepSeek-Home/notes/snapshots-2026-09-26/hand-deck-launcher-STALE-pre-S365-2026-09-26.tar.gz`.
 - **Map shows "API KEY REQUIRED":** CARTO needs `?key=` since 2026-08-26 → [[map-tiles-overview]].
   ✅ This is **fixed and committed** (`bbf663b`: per-provider own-key handling, keyless fallback → offline
   `local` pack, then Esri) and deployed to the device — the older "patched but uncommitted" warning here

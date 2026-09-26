@@ -80,10 +80,10 @@ The A7A/PowerVR ceiling that shelved HD is a **hardware** limitation. This launc
   fallback → offline `local` pack, then Esri) and it was deployed to the device. ⚠️ Separately, the working
   tree carried a *different* uncommitted `map.html` that **re-added the OLD, REVOKED key** — that was
   **discarded, never merged** on 2026-09-26 while reconciling this checkout with `origin/main`.
-- 📌 **The stale `Projects/hand-deck/launcher/` copy is still there** (not a git repo, superseded at S365,
-  marked `STALE-DO-NOT-USE.md`). It is a genuine **second copy of this launcher**, and its code is in no git
-  history (291 lines, 2026-06-30, vs the repo's 473), so a **backup tarball was taken 2026-09-26** before
-  anything is done. **Removal is Filip's call** — the S365 "retire stale copy" TODO.
+- ✅ **The stale `Projects/hand-deck/launcher/` copy was DELETED 2026-09-26 (Filip's go)** — the genuine second
+  copy of this launcher: not a git repo, superseded at S365, marked `STALE-DO-NOT-USE.md`. Its code (291 lines,
+  2026-06-30) **predated this repo**, so it was in no git history, and a **backup tarball was taken first**:
+  `~/DeepSeek-Home/notes/snapshots-2026-09-26/hand-deck-launcher-STALE-pre-S365-2026-09-26.tar.gz`.
 
 ---
 
